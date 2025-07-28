@@ -24,6 +24,7 @@ import android.widget.Button
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -102,6 +103,20 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (options.hardwareBack && webView.canGoBack()) {
+                    hideErrorScreen()
+                    webView.goBack()
+                } else {
+                    sendWebViewEvent(OSIABEvents.BrowserFinished(browserId))
+                    webView.destroy()
+                    this.isEnabled = false // disable the callback to prevent it from being called again
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
 
         browserId = intent.getStringExtra(OSIABEvents.EXTRA_BROWSER_ID) ?: ""
 
@@ -247,20 +262,6 @@ class OSIABWebViewActivity : AppCompatActivity() {
      */
     private fun customWebChromeClient(): WebChromeClient {
         return OSIABWebChromeClient()
-    }
-
-    /**
-     * Handle the back button press
-     */
-    override fun onBackPressed() {
-        if (options.hardwareBack && webView.canGoBack()) {
-            hideErrorScreen()
-            webView.goBack()
-        } else {
-            sendWebViewEvent(OSIABEvents.BrowserFinished(browserId))
-            webView.destroy()
-            onBackPressedDispatcher.onBackPressed()
-        }
     }
 
     /**
