@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.4.1]
 
+### Features
+
+- Added support for predictive back navigation for Android 13+ (https://outsystemsrd.atlassian.net/browse/RMET-4335)
+
 ### Fixes
 
 - Migrate back button navigation on `OSIABWebViewActivity` to support apps targeting Android 16 (https://outsystemsrd.atlassian.net/browse/RMET-4335)
