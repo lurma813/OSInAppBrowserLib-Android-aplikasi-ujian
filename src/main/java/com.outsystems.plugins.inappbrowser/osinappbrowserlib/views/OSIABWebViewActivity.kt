@@ -110,14 +110,8 @@ class OSIABWebViewActivity : AppCompatActivity() {
         onBackPressedCallback = object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (!webView.canGoBack()) return
-                if (options.hardwareBack) {
-                    hideErrorScreen()
-                    webView.goBack()
-                } else {
-                    // if hardwareBack is false, we want to finish the activity (close the WebView)
-                    // and not go back in the WebView history
-                    finish()
-                }
+                hideErrorScreen()
+                webView.goBack()
             }
         }
         onBackPressedDispatcher.addCallback(this, onBackPressedCallback)
@@ -403,9 +397,10 @@ class OSIABWebViewActivity : AppCompatActivity() {
         override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
             // to implement predictive back navigation
             // we only want to have the callback enabled if the WebView can go back to previous page
+            // and if the hardwareBack option is enabled
             // if not, we want the system to handle the back press, which will enable the
-            // predictive back animation
-            onBackPressedCallback.isEnabled = webView.canGoBack()
+            // predictive back animation and simply close the WebView
+            onBackPressedCallback.isEnabled = webView.canGoBack() && options.hardwareBack
         }
 
         /**
