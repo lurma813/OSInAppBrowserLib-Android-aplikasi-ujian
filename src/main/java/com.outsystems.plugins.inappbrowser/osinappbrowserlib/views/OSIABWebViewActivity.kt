@@ -85,6 +85,9 @@ class OSIABWebViewActivity : AppCompatActivity() {
             filePathCallback = null
         }
 
+    // for back navigation
+    private lateinit var onBackPressedCallback: OnBackPressedCallback
+
     companion object {
         const val WEB_VIEW_URL_EXTRA = "WEB_VIEW_URL_EXTRA"
         const val WEB_VIEW_OPTIONS_EXTRA = "WEB_VIEW_OPTIONS_EXTRA"
@@ -104,19 +107,20 @@ class OSIABWebViewActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+        onBackPressedCallback = object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (options.hardwareBack && webView.canGoBack()) {
+                if (!webView.canGoBack()) return
+                if (options.hardwareBack) {
                     hideErrorScreen()
                     webView.goBack()
                 } else {
-                    sendWebViewEvent(OSIABEvents.BrowserFinished(browserId))
-                    webView.destroy()
-                    this.isEnabled = false // disable the callback to prevent it from being called again
-                    onBackPressedDispatcher.onBackPressed()
+                    // if hardwareBack is false, we want to finish the activity (close the WebView)
+                    // and not go back in the WebView history
+                    finish()
                 }
             }
-        })
+        }
+        onBackPressedDispatcher.addCallback(this, onBackPressedCallback)
 
         browserId = intent.getStringExtra(OSIABEvents.EXTRA_BROWSER_ID) ?: ""
 
@@ -152,8 +156,6 @@ class OSIABWebViewActivity : AppCompatActivity() {
         closeButton = findViewById(R.id.close_button)
         closeButton.text = options.closeButtonText.ifBlank { "Close" }
         closeButton.setOnClickListener {
-            sendWebViewEvent(OSIABEvents.BrowserFinished(browserId))
-            webView.destroy()
             finish()
         }
 
@@ -189,6 +191,18 @@ class OSIABWebViewActivity : AppCompatActivity() {
         if (options.pauseMedia) {
             webView.onPause()
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (isFinishing) {
+            sendWebViewEvent(OSIABEvents.BrowserFinished(browserId))
+        }
+    }
+
+    override fun onDestroy() {
+        webView.destroy()
+        super.onDestroy()
     }
 
     override fun onResume() {
@@ -252,7 +266,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
      */
     private fun customWebViewClient(
         hasNavigationButtons: Boolean,
-        showURL: Boolean,
+        showURL: Boolean
     ): WebViewClient {
         return OSIABWebViewClient(hasNavigationButtons, showURL)
     }
@@ -301,7 +315,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
      */
     private inner class OSIABWebViewClient(
         val hasNavigationButtons: Boolean,
-        val showURL: Boolean
+        val showURL: Boolean,
     ) : WebViewClient() {
 
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -384,6 +398,14 @@ class OSIABWebViewActivity : AppCompatActivity() {
                     showErrorScreen()
                 }
             }
+        }
+
+        override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+            // to implement predictive back navigation
+            // we only want to have the callback enabled if the WebView can go back to previous page
+            // if not, we want the system to handle the back press, which will enable the
+            // predictive back animation
+            onBackPressedCallback.isEnabled = webView.canGoBack()
         }
 
         /**
