@@ -1,5 +1,5 @@
 buildscript {
-    ext.kotlin_version = "1.9.24"
+    ext.kotlin_version = "1.9.25"
     ext.jacocoVersion = '0.8.7'
     repositories {
         google()
@@ -12,7 +12,7 @@ buildscript {
         if (System.getenv("SHOULD_PUBLISH") == "true") {
             classpath("io.github.gradle-nexus:publish-plugin:1.1.0")
         }
-        classpath 'com.android.tools.build:gradle:8.7.3'
+        classpath 'com.android.tools.build:gradle:8.11.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
         classpath "org.jacoco:org.jacoco.core:$jacocoVersion"
     }
@@ -41,11 +41,11 @@ apply plugin: "jacoco"
 
 android {
     namespace "com.outsystems.plugins.inappbrowser.osinappbrowserlib"
-    compileSdk 35
+    compileSdk 36
 
     defaultConfig {
         minSdk 26
-        targetSdk 35
+        targetSdk 36
         versionCode 1
         versionName "1.0"
 

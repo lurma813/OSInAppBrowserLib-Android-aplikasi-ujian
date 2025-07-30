@@ -24,6 +24,7 @@ import android.widget.Button
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -84,6 +85,9 @@ class OSIABWebViewActivity : AppCompatActivity() {
             filePathCallback = null
         }
 
+    // for back navigation
+    private lateinit var onBackPressedCallback: OnBackPressedCallback
+
     companion object {
         const val WEB_VIEW_URL_EXTRA = "WEB_VIEW_URL_EXTRA"
         const val WEB_VIEW_OPTIONS_EXTRA = "WEB_VIEW_OPTIONS_EXTRA"
@@ -102,6 +106,15 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        onBackPressedCallback = object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (!webView.canGoBack()) return
+                hideErrorScreen()
+                webView.goBack()
+            }
+        }
+        onBackPressedDispatcher.addCallback(this, onBackPressedCallback)
 
         browserId = intent.getStringExtra(OSIABEvents.EXTRA_BROWSER_ID) ?: ""
 
@@ -137,8 +150,6 @@ class OSIABWebViewActivity : AppCompatActivity() {
         closeButton = findViewById(R.id.close_button)
         closeButton.text = options.closeButtonText.ifBlank { "Close" }
         closeButton.setOnClickListener {
-            sendWebViewEvent(OSIABEvents.BrowserFinished(browserId))
-            webView.destroy()
             finish()
         }
 
@@ -174,6 +185,18 @@ class OSIABWebViewActivity : AppCompatActivity() {
         if (options.pauseMedia) {
             webView.onPause()
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (isFinishing) {
+            sendWebViewEvent(OSIABEvents.BrowserFinished(browserId))
+        }
+    }
+
+    override fun onDestroy() {
+        webView.destroy()
+        super.onDestroy()
     }
 
     override fun onResume() {
@@ -237,7 +260,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
      */
     private fun customWebViewClient(
         hasNavigationButtons: Boolean,
-        showURL: Boolean,
+        showURL: Boolean
     ): WebViewClient {
         return OSIABWebViewClient(hasNavigationButtons, showURL)
     }
@@ -247,20 +270,6 @@ class OSIABWebViewActivity : AppCompatActivity() {
      */
     private fun customWebChromeClient(): WebChromeClient {
         return OSIABWebChromeClient()
-    }
-
-    /**
-     * Handle the back button press
-     */
-    override fun onBackPressed() {
-        if (options.hardwareBack && webView.canGoBack()) {
-            hideErrorScreen()
-            webView.goBack()
-        } else {
-            sendWebViewEvent(OSIABEvents.BrowserFinished(browserId))
-            webView.destroy()
-            onBackPressedDispatcher.onBackPressed()
-        }
     }
 
     /**
@@ -300,7 +309,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
      */
     private inner class OSIABWebViewClient(
         val hasNavigationButtons: Boolean,
-        val showURL: Boolean
+        val showURL: Boolean,
     ) : WebViewClient() {
 
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -383,6 +392,15 @@ class OSIABWebViewActivity : AppCompatActivity() {
                     showErrorScreen()
                 }
             }
+        }
+
+        override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+            // to implement predictive back navigation
+            // we only want to have the callback enabled if the WebView can go back to previous page
+            // and if the hardwareBack option is enabled
+            // if not, we want the system to handle the back press, which will enable the
+            // predictive back animation and simply close the WebView
+            onBackPressedCallback.isEnabled = webView.canGoBack() && options.hardwareBack
         }
 
         /**
