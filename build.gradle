@@ -142,3 +142,85 @@ dependencies {
 if (System.getenv("SHOULD_PUBLISH") == "true") {
     apply from: file("./scripts/publish-module.gradle")
 }
+
+import java.net.URL
+
+def pdfJsVersion = "5.4.54"
+def pdfJsUrl = "https://github.com/mozilla/pdf.js/releases/download/v${pdfJsVersion}/pdfjs-${pdfJsVersion}-dist.zip"
+def pdfJsDestDir = "$projectDir/src/main/assets/pdfjs"
+def pdfJsCacheDir = new File(gradle.gradleUserHomeDir, "pdfjs-cache/${pdfJsVersion}")
+
+tasks.register("downloadPdfJs") {
+    description = "Downloads and caches PDF.js distribution files"
+    group = "build setup"
+    
+    // Define inputs/outputs for up-to-date checking
+    inputs.property("pdfJsVersion", pdfJsVersion)
+    outputs.dir(pdfJsDestDir)
+    
+    doLast {
+        def destDir = file(pdfJsDestDir)
+        
+        // Check if destination already has files
+        if (destDir.exists() && destDir.listFiles()?.size() > 0) {
+            logger.info("PDF.js files already exist in ${destDir}")
+            return
+        }
+
+        // Check if cache has files and copy them
+        if (pdfJsCacheDir.exists() && pdfJsCacheDir.listFiles()?.size() > 0) {
+            logger.info("Copying PDF.js from cache: ${pdfJsCacheDir}")
+            copy {
+                from pdfJsCacheDir
+                into destDir
+            }
+            return
+        }
+
+        // Download PDF.js
+        logger.info("Downloading PDF.js v${pdfJsVersion} from ${pdfJsUrl}")
+        def zipFile = file("$buildDir/pdfjs-${pdfJsVersion}.zip")
+        
+        try {
+            // Ensure build directory exists
+            zipFile.parentFile.mkdirs()
+            
+            // Download with better error handling
+            new URL(pdfJsUrl).withInputStream { inputStream ->
+                zipFile.withOutputStream { outputStream ->
+                    outputStream << inputStream
+                }
+            }
+            
+            logger.info("Downloaded PDF.js to: ${zipFile}")
+
+            // Extract to cache
+            pdfJsCacheDir.mkdirs()
+            copy {
+                from zipTree(zipFile)
+                into pdfJsCacheDir
+            }
+
+            // Copy from cache to destination
+            if (destDir.exists()) {
+                delete destDir
+            }
+            destDir.mkdirs()
+            copy {
+                from pdfJsCacheDir
+                into destDir
+            }
+            
+            logger.info("PDF.js extracted to: ${destDir}")
+            
+            // Clean up downloaded zip
+            delete zipFile
+            
+        } catch (Exception e) {
+            logger.error("Failed to download PDF.js: ${e.message}")
+            throw new GradleException("Could not download PDF.js from ${pdfJsUrl}", e)
+        }
+    }
+}
+
+preBuild.dependsOn(downloadPdfJs)
