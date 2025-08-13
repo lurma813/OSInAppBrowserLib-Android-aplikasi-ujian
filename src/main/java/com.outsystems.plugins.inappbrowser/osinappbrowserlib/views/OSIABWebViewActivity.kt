@@ -241,6 +241,9 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
     fun isContentTypeApplicationPdf(urlString: String): Boolean {
         return try {
+            // Try to identify if the URL is a PDF using a HEAD request.
+            // If the server does not implement HEAD correctly or does not return the expected content-type,
+            // fall back to a GET request, since some servers only return the correct type for GET.
             if (checkPdfByRequest(urlString, method = "HEAD")) {
                 true
             } else {
