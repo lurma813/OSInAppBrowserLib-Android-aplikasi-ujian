@@ -371,14 +371,11 @@ class OSIABWebViewActivity : AppCompatActivity() {
                 sendWebViewEvent(OSIABEvents.BrowserPageNavigationCompleted(browserId, resolvedUrl))
             }
 
-            if (url?.startsWith(PDF_VIEWER_URL_PREFIX) == true) {
-                if (options.clearCache) {
-                    webView.evaluateJavascript(
-                        "localStorage.clear(); sessionStorage.clear();", null
-                    );
-                }
+            if (url?.startsWith(PDF_VIEWER_URL_PREFIX) == true && options.clearCache) {
+                webView.evaluateJavascript(
+                    "localStorage.clear(); sessionStorage.clear();", null
+                )
             }
-
 
             // set back to false so that the next successful load
             // if the load fails, onReceivedError takes care of setting it back to true
