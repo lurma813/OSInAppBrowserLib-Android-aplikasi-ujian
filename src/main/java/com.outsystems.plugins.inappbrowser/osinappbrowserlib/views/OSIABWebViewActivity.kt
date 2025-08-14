@@ -357,7 +357,18 @@ class OSIABWebViewActivity : AppCompatActivity() {
             }
         }
 
+        var lastPageFinishedUrl: String? = null
+
         override fun onPageFinished(view: WebView?, url: String?) {
+            if (url != null && url == lastPageFinishedUrl && url.startsWith(PDF_VIEWER_URL_PREFIX)) {
+                // If the url is the same as the last finished URL and it is a PDF viewer URL,
+                // we do not want to trigger the page finished event again.
+                // This prevents the event from being sent multiple times
+                // since PDF.js triggers onPageFinished multiple times during PDF rendering.
+                return
+            }
+            lastPageFinishedUrl = url
+
             val resolvedUrl = when {
                 url == null -> null
                 url.startsWith(PDF_VIEWER_URL_PREFIX) && originalUrl != null -> originalUrl
