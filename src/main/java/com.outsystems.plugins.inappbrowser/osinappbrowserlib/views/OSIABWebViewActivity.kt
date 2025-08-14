@@ -38,15 +38,13 @@ import androidx.lifecycle.lifecycleScope
 import com.outsystems.plugins.inappbrowser.osinappbrowserlib.OSIABEvents
 import com.outsystems.plugins.inappbrowser.osinappbrowserlib.OSIABEvents.OSIABWebViewEvent
 import com.outsystems.plugins.inappbrowser.osinappbrowserlib.R
+import com.outsystems.plugins.inappbrowser.osinappbrowserlib.helpers.OSIABPdfHelper
 import com.outsystems.plugins.inappbrowser.osinappbrowserlib.models.OSIABToolbarPosition
 import com.outsystems.plugins.inappbrowser.osinappbrowserlib.models.OSIABWebViewOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 
 class OSIABWebViewActivity : AppCompatActivity() {
 
@@ -219,8 +217,8 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
     private fun handleLoadUrl(url: String, additionalHttpHeaders: Map<String, String>? = null) {
         lifecycleScope.launch(Dispatchers.IO) {
-            if (isContentTypeApplicationPdf(url)) {
-                val pdfFile = try { downloadPdfToCache(url) } catch (_: IOException) { null }
+            if (OSIABPdfHelper.isContentTypeApplicationPdf(url)) {
+                val pdfFile = try { OSIABPdfHelper.downloadPdfToCache(this@OSIABWebViewActivity, url) } catch (_: IOException) { null }
                 if (pdfFile != null) {
                     withContext(Dispatchers.Main) {
                         webView.stopLoading()
@@ -239,51 +237,6 @@ class OSIABWebViewActivity : AppCompatActivity() {
         }
     }
 
-    fun isContentTypeApplicationPdf(urlString: String): Boolean {
-        return try {
-            // Try to identify if the URL is a PDF using a HEAD request.
-            // If the server does not implement HEAD correctly or does not return the expected content-type,
-            // fall back to a GET request, since some servers only return the correct type for GET.
-            if (checkPdfByRequest(urlString, method = "HEAD")) {
-                true
-            } else {
-                checkPdfByRequest(urlString, method = "GET")
-            }
-        } catch (_: Exception) {
-            false
-        }
-    }
-
-    private fun checkPdfByRequest(urlString: String, method: String): Boolean {
-        var conn: HttpURLConnection? = null
-        return try {
-            conn = (URL(urlString).openConnection() as? HttpURLConnection)
-            conn?.run {
-                instanceFollowRedirects = true
-                requestMethod = method
-                if (method == "GET") {
-                    setRequestProperty("Range", "bytes=0-0")
-                }
-                connect()
-                val type = contentType?.lowercase()
-                val disposition = getHeaderField("Content-Disposition")?.lowercase()
-                type == "application/pdf" ||
-                        (type.isNullOrEmpty() && disposition?.contains(".pdf") == true)
-            } ?: false
-        } finally {
-            conn?.disconnect()
-        }
-    }
-
-    private fun downloadPdfToCache(url: String): File {
-        val pdfFile = File(cacheDir, "temp_${System.currentTimeMillis()}.pdf")
-        URL(url).openStream().use { input ->
-            pdfFile.outputStream().use { output ->
-                input.copyTo(output)
-            }
-        }
-        return pdfFile
-    }
 
     /**
      * Helper function to update navigation button states
@@ -417,6 +370,15 @@ class OSIABWebViewActivity : AppCompatActivity() {
             } else if (!hasLoadError) {
                 sendWebViewEvent(OSIABEvents.BrowserPageNavigationCompleted(browserId, resolvedUrl))
             }
+
+            if (url?.startsWith(PDF_VIEWER_URL_PREFIX) == true) {
+                if (options.clearCache) {
+                    webView.evaluateJavascript(
+                        "localStorage.clear(); sessionStorage.clear();", null
+                    );
+                }
+            }
+
 
             // set back to false so that the next successful load
             // if the load fails, onReceivedError takes care of setting it back to true
