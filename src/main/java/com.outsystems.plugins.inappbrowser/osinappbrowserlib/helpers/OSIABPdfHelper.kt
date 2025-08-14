@@ -7,6 +7,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object OSIABPdfHelper {
+
+    interface UrlFactory {
+        fun create(url: String): URL
+    }
+
+    private class DefaultUrlFactory : UrlFactory {
+        override fun create(url: String): URL = URL(url)
+    }
     
     fun isContentTypeApplicationPdf(urlString: String): Boolean {
         return try {
@@ -23,10 +31,10 @@ object OSIABPdfHelper {
         }
     }
 
-    fun checkPdfByRequest(urlString: String, method: String): Boolean {
+    fun checkPdfByRequest(urlString: String, method: String, urlFactory: UrlFactory = DefaultUrlFactory()): Boolean {
         var conn: HttpURLConnection? = null
         return try {
-            conn = (URL(urlString).openConnection() as? HttpURLConnection)
+            conn = (urlFactory.create(urlString).openConnection() as? HttpURLConnection)
             conn?.run {
                 instanceFollowRedirects = true
                 requestMethod = method

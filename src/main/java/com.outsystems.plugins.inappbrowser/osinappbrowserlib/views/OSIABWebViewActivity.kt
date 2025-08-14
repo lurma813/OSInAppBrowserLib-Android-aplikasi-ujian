@@ -379,7 +379,6 @@ class OSIABWebViewActivity : AppCompatActivity() {
                 }
             }
 
-
             // set back to false so that the next successful load
             // if the load fails, onReceivedError takes care of setting it back to true
             hasLoadError = false
