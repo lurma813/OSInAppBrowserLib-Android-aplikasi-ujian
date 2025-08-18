@@ -4,12 +4,12 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.view.Gravity
 import android.util.Log
-import android.graphics.Bitmap
+import android.view.Gravity
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
@@ -38,9 +38,13 @@ import androidx.lifecycle.lifecycleScope
 import com.outsystems.plugins.inappbrowser.osinappbrowserlib.OSIABEvents
 import com.outsystems.plugins.inappbrowser.osinappbrowserlib.OSIABEvents.OSIABWebViewEvent
 import com.outsystems.plugins.inappbrowser.osinappbrowserlib.R
+import com.outsystems.plugins.inappbrowser.osinappbrowserlib.helpers.OSIABPdfHelper
 import com.outsystems.plugins.inappbrowser.osinappbrowserlib.models.OSIABToolbarPosition
 import com.outsystems.plugins.inappbrowser.osinappbrowserlib.models.OSIABWebViewOptions
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.IOException
 
 class OSIABWebViewActivity : AppCompatActivity() {
 
@@ -87,6 +91,11 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
     // for back navigation
     private lateinit var onBackPressedCallback: OnBackPressedCallback
+
+    private val PDF_VIEWER_URL_PREFIX = "file:///android_asset/pdfjs/web/viewer.html?file="
+    // the original URL of the PDF file, used to display it correctly in the view
+    // and to send the correct URL in the browserPageNavigationCompleted event
+    private var originalUrl: String? = null
 
     companion object {
         const val WEB_VIEW_URL_EXTRA = "WEB_VIEW_URL_EXTRA"
@@ -173,7 +182,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
         setupWebView()
         if (urlToOpen != null) {
-            webView.loadUrl(urlToOpen, customHeaders ?: emptyMap())
+            handleLoadUrl(urlToOpen, customHeaders)
             showLoadingScreen()
         }
 
@@ -206,6 +215,29 @@ class OSIABWebViewActivity : AppCompatActivity() {
         }
     }
 
+    private fun handleLoadUrl(url: String, additionalHttpHeaders: Map<String, String>? = null) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            if (OSIABPdfHelper.isContentTypeApplicationPdf(url)) {
+                val pdfFile = try { OSIABPdfHelper.downloadPdfToCache(this@OSIABWebViewActivity, url) } catch (_: IOException) { null }
+                if (pdfFile != null) {
+                    withContext(Dispatchers.Main) {
+                        webView.stopLoading()
+                        originalUrl = url
+                        val pdfJsUrl =
+                            PDF_VIEWER_URL_PREFIX + Uri.encode("file://${pdfFile.absolutePath}")
+                        webView.loadUrl(pdfJsUrl)
+                    }
+                    return@launch
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                webView.loadUrl(url, additionalHttpHeaders ?: emptyMap())
+            }
+        }
+    }
+
+
     /**
      * Helper function to update navigation button states
      */
@@ -232,19 +264,24 @@ class OSIABWebViewActivity : AppCompatActivity() {
      * It also deals with URLs that are opened withing the WebView.
      */
     private fun setupWebView() {
-        webView.settings.javaScriptEnabled = true
-        webView.settings.javaScriptCanOpenWindowsAutomatically = true
-        webView.settings.databaseEnabled = true
-        webView.settings.domStorageEnabled = true
-        webView.settings.loadWithOverviewMode = true
-        webView.settings.useWideViewPort = true
+        webView.settings.apply {
+            javaScriptEnabled = true
+            javaScriptCanOpenWindowsAutomatically = true
+            databaseEnabled = true
+            domStorageEnabled = true
+            loadWithOverviewMode = true
+            useWideViewPort = true
+            allowFileAccess = true
+            allowFileAccessFromFileURLs = true
+            allowUniversalAccessFromFileURLs = true
 
-        if (!options.customUserAgent.isNullOrEmpty())
-            webView.settings.userAgentString = options.customUserAgent
+            if (!options.customUserAgent.isNullOrEmpty())
+                userAgentString = options.customUserAgent
 
-        // get webView settings that come from options
-        webView.settings.builtInZoomControls = options.allowZoom
-        webView.settings.mediaPlaybackRequiresUserGesture = options.mediaPlaybackRequiresUserAction
+            // get webView settings that come from options
+            builtInZoomControls = options.allowZoom
+            mediaPlaybackRequiresUserGesture = options.mediaPlaybackRequiresUserAction
+        }
 
         // setup WebViewClient and WebChromeClient
         webView.webViewClient =
@@ -320,12 +357,35 @@ class OSIABWebViewActivity : AppCompatActivity() {
             }
         }
 
+        var lastPageFinishedUrl: String? = null
+
         override fun onPageFinished(view: WebView?, url: String?) {
+            if (url != null && url == lastPageFinishedUrl && url.startsWith(PDF_VIEWER_URL_PREFIX)) {
+                // If the url is the same as the last finished URL and it is a PDF viewer URL,
+                // we do not want to trigger the page finished event again.
+                // This prevents the event from being sent multiple times
+                // since PDF.js triggers onPageFinished multiple times during PDF rendering.
+                return
+            }
+            lastPageFinishedUrl = url
+
+            val resolvedUrl = when {
+                url == null -> null
+                url.startsWith(PDF_VIEWER_URL_PREFIX) && originalUrl != null -> originalUrl
+                else -> url
+            }
+
             if (isFirstLoad && !hasLoadError) {
                 sendWebViewEvent(OSIABEvents.BrowserPageLoaded(browserId))
                 isFirstLoad = false
             } else if (!hasLoadError) {
-                sendWebViewEvent(OSIABEvents.BrowserPageNavigationCompleted(browserId, url))
+                sendWebViewEvent(OSIABEvents.BrowserPageNavigationCompleted(browserId, resolvedUrl))
+            }
+
+            if (url?.startsWith(PDF_VIEWER_URL_PREFIX) == true && options.clearCache) {
+                webView.evaluateJavascript(
+                    "localStorage.clear(); sessionStorage.clear();", null
+                )
             }
 
             // set back to false so that the next successful load
@@ -335,7 +395,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
             // store cookies after page finishes loading
             storeCookies()
             if (hasNavigationButtons) updateNavigationButtons()
-            if (showURL) urlText.text = url
+            if (showURL) urlText.text = resolvedUrl
             currentUrl = url
             super.onPageFinished(view, url)
         }
@@ -368,7 +428,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
                 }
                 // handle every http and https link by loading it in the WebView
                 urlString.startsWith("http:") || urlString.startsWith("https:") -> {
-                    view?.loadUrl(urlString)
+                    handleLoadUrl(urlString)
                     if (showURL) urlText.text = urlString
                     true
                 }
@@ -646,7 +706,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
         return findViewById<Button?>(R.id.reload_button).apply {
             setOnClickListener {
                 currentUrl?.let {
-                    webView.loadUrl(it)
+                    handleLoadUrl(it)
                     showLoadingScreen()
                 }
             }

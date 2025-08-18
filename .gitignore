@@ -88,3 +88,6 @@ lint/tmp/
 Gemfile.lock
 
 scripts/tmp
+
+# PDF.js files
+src/main/assets/pdfjs/
