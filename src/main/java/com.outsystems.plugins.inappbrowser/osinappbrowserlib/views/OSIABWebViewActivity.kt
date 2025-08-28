@@ -574,38 +574,40 @@ class OSIABWebViewActivity : AppCompatActivity() {
             val acceptTypes = fileChooserParams.acceptTypes.joinToString()
             val intentList = mutableListOf<Intent>()
 
-            // --- Photo capture ---
-            if (acceptTypes.contains("image") || acceptTypes.isEmpty()) {
-                val photoFile = createTempFile(this@OSIABWebViewActivity, "IMG_", ".jpg")
-                currentPhotoUri = FileProvider.getUriForFile(
-                    this@OSIABWebViewActivity,
-                    "${this@OSIABWebViewActivity.packageName}.fileprovider",
-                    photoFile
-                )
+            if (fileChooserParams.isCaptureEnabled) {
+                // --- Photo capture ---
+                if (acceptTypes.contains("image") || acceptTypes.isEmpty()) {
+                    val photoFile = createTempFile(this@OSIABWebViewActivity, "IMG_", ".jpg")
+                    currentPhotoUri = FileProvider.getUriForFile(
+                        this@OSIABWebViewActivity,
+                        "${this@OSIABWebViewActivity.packageName}.fileprovider",
+                        photoFile
+                    )
 
-                val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
-                    putExtra(MediaStore.EXTRA_OUTPUT, currentPhotoUri)
-                    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                        putExtra(MediaStore.EXTRA_OUTPUT, currentPhotoUri)
+                        addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    grantUriPermissions(this@OSIABWebViewActivity, takePictureIntent, currentPhotoUri!!)
+                    intentList.add(takePictureIntent)
                 }
-                grantUriPermissions(this@OSIABWebViewActivity, takePictureIntent, currentPhotoUri!!)
-                intentList.add(takePictureIntent)
-            }
 
-            // --- Video capture ---
-            if (acceptTypes.contains("video") || acceptTypes.isEmpty()) {
-                val videoFile = createTempFile(this@OSIABWebViewActivity, "VID_", ".mp4")
-                currentVideoUri = FileProvider.getUriForFile(
-                    this@OSIABWebViewActivity,
-                    "${this@OSIABWebViewActivity.packageName}.fileprovider",
-                    videoFile
-                )
+                // --- Video capture ---
+                if (acceptTypes.contains("video") || acceptTypes.isEmpty()) {
+                    val videoFile = createTempFile(this@OSIABWebViewActivity, "VID_", ".mp4")
+                    currentVideoUri = FileProvider.getUriForFile(
+                        this@OSIABWebViewActivity,
+                        "${this@OSIABWebViewActivity.packageName}.fileprovider",
+                        videoFile
+                    )
 
-                val takeVideoIntent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).apply {
-                    putExtra(MediaStore.EXTRA_OUTPUT, currentVideoUri)
-                    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    val takeVideoIntent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).apply {
+                        putExtra(MediaStore.EXTRA_OUTPUT, currentVideoUri)
+                        addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    grantUriPermissions(this@OSIABWebViewActivity, takeVideoIntent, currentVideoUri!!)
+                    intentList.add(takeVideoIntent)
                 }
-                grantUriPermissions(this@OSIABWebViewActivity, takeVideoIntent, currentVideoUri!!)
-                intentList.add(takeVideoIntent)
             }
 
             // --- Gallery picker ---
