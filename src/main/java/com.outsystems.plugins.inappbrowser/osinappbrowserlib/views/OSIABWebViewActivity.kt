@@ -2,14 +2,17 @@ package com.outsystems.plugins.inappbrowser.osinappbrowserlib.views
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import android.view.Gravity
+import android.graphics.Bitmap
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
@@ -33,6 +36,7 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import com.outsystems.plugins.inappbrowser.osinappbrowserlib.OSIABEvents
@@ -44,6 +48,7 @@ import com.outsystems.plugins.inappbrowser.osinappbrowserlib.models.OSIABWebView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.io.IOException
 
 class OSIABWebViewActivity : AppCompatActivity() {
@@ -81,12 +86,31 @@ class OSIABWebViewActivity : AppCompatActivity() {
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val fileChooserLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            /*
             filePathCallback?.onReceiveValue(
                 if (result.resultCode == Activity.RESULT_OK)
                     WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
                 else null
             )
             filePathCallback = null
+             */
+
+            val uris = when {
+                result.resultCode != Activity.RESULT_OK -> null
+                result.data?.data != null -> WebChromeClient.FileChooserParams.parseResult(
+                    result.resultCode,
+                    result.data
+                ) // gallery
+                currentPhotoUri != null -> arrayOf(currentPhotoUri) // photo capture
+                currentVideoUri != null -> arrayOf(currentVideoUri) // video capture
+                else -> null
+            }
+
+            filePathCallback?.onReceiveValue(uris)
+            filePathCallback = null
+            currentPhotoUri = null
+            currentVideoUri = null
+
         }
 
     // for back navigation
@@ -96,6 +120,9 @@ class OSIABWebViewActivity : AppCompatActivity() {
     // the original URL of the PDF file, used to display it correctly in the view
     // and to send the correct URL in the browserPageNavigationCompleted event
     private var originalUrl: String? = null
+
+    private var currentPhotoUri: Uri? = null
+    private var currentVideoUri: Uri? = null
 
     companion object {
         const val WEB_VIEW_URL_EXTRA = "WEB_VIEW_URL_EXTRA"
@@ -111,6 +138,23 @@ class OSIABWebViewActivity : AppCompatActivity() {
             WebViewClient.ERROR_UNSUPPORTED_SCHEME,
             WebViewClient.ERROR_BAD_URL
         )
+
+        private fun createTempFile(context: Context, prefix: String, suffix: String): File {
+            val storageDir = context.cacheDir
+            return File.createTempFile("${prefix}${System.currentTimeMillis()}_", suffix, storageDir)
+        }
+
+        private fun grantUriPermissions(context: Context, intent: Intent, uri: Uri) {
+            val resInfoList = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            for (resolveInfo in resInfoList) {
+                context.grantUriPermission(
+                    resolveInfo.activityInfo.packageName,
+                    uri,
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+        }
+
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -514,12 +558,68 @@ class OSIABWebViewActivity : AppCompatActivity() {
         override fun onShowFileChooser(
             webView: WebView?,
             filePathCallback: ValueCallback<Array<Uri>>?,
-            fileChooserParams: FileChooserParams?
+            fileChooserParams: FileChooserParams
         ): Boolean {
             this@OSIABWebViewActivity.filePathCallback = filePathCallback
-            val intent = fileChooserParams?.createIntent()
+
+            val acceptTypes = fileChooserParams.acceptTypes.joinToString()
+            val intentList = mutableListOf<Intent>()
+
+            // --- Photo capture ---
+            if (acceptTypes.contains("image") || acceptTypes.isEmpty()) {
+                val photoFile = createTempFile(this@OSIABWebViewActivity, "IMG_", ".jpg")
+                currentPhotoUri = FileProvider.getUriForFile(
+                    this@OSIABWebViewActivity,
+                    "${this@OSIABWebViewActivity.packageName}.fileprovider",
+                    photoFile
+                )
+
+                val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                    putExtra(MediaStore.EXTRA_OUTPUT, currentPhotoUri)
+                    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                grantUriPermissions(this@OSIABWebViewActivity, takePictureIntent, currentPhotoUri!!)
+                intentList.add(takePictureIntent)
+            }
+
+            // --- Video capture ---
+            if (acceptTypes.contains("video") || acceptTypes.isEmpty()) {
+                val videoFile = createTempFile(this@OSIABWebViewActivity, "VID_", ".mp4")
+                currentVideoUri = FileProvider.getUriForFile(
+                    this@OSIABWebViewActivity,
+                    "${this@OSIABWebViewActivity.packageName}.fileprovider",
+                    videoFile
+                )
+
+                val takeVideoIntent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).apply {
+                    putExtra(MediaStore.EXTRA_OUTPUT, currentVideoUri)
+                    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                grantUriPermissions(this@OSIABWebViewActivity, takeVideoIntent, currentVideoUri!!)
+                intentList.add(takeVideoIntent)
+            }
+
+            // --- Gallery picker ---
+            val contentIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = when {
+                    acceptTypes.contains("video") -> "video/*"
+                    acceptTypes.contains("image") -> "image/*"
+                    else -> "*/*"
+                }
+            }
+
+            // --- Chooser ---
+            val chooserIntent = Intent(Intent.ACTION_CHOOSER).apply {
+                putExtra(Intent.EXTRA_INTENT, contentIntent)
+                putExtra(Intent.EXTRA_TITLE, "Select or capture")
+                putExtra(Intent.EXTRA_INITIAL_INTENTS, intentList.toTypedArray())
+            }
+
+            val intent = fileChooserParams.createIntent()
             try {
-                fileChooserLauncher.launch(intent!!)
+                //fileChooserLauncher.launch(intent!!)
+                fileChooserLauncher.launch(chooserIntent)
             } catch (npe: NullPointerException) {
                 this@OSIABWebViewActivity.filePathCallback = null
                 Log.e(
