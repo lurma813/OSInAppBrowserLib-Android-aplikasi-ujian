@@ -132,6 +132,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
         const val ENABLED_ALPHA = 1.0f
         const val REQUEST_STANDARD_PERMISSION = 622
         const val REQUEST_LOCATION_PERMISSION = 623
+        const val CAMERA_PERMISSION_REQUEST_CODE = 824
         const val LOG_TAG = "OSIABWebViewActivity"
         val errorsToHandle = listOf(
             WebViewClient.ERROR_HOST_LOOKUP,
@@ -382,6 +383,26 @@ class OSIABWebViewActivity : AppCompatActivity() {
                 geolocationCallback = null
                 geolocationOrigin = null
             }
+            CAMERA_PERMISSION_REQUEST_CODE -> {
+                val granted = grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+                if (granted) {
+                    // Permission granted, launch the file chooser
+                    try {
+                        filePathCallback?.let {
+                            //launchFileChooser("", true)
+                            //webView.webChromeClient.retryFileChooser()
+                            (webView.webChromeClient as? OSIABWebChromeClient)?.retryFileChooser() //TODO not the best way of calling this method
+                        }
+                    } catch (e: Exception) {
+                        Log.d(LOG_TAG, "Error launching file chooser. Exception: ${e.message}")
+                    }
+                } else {
+                    // Permission denied, notify the WebView
+                    //filePathCallback?.onReceiveValue(null)
+                    //filePathCallback = null
+                    (webView.webChromeClient as? OSIABWebChromeClient)?.cancelFileChooser()
+                }
+            }
         }
     }
 
@@ -546,6 +567,9 @@ class OSIABWebViewActivity : AppCompatActivity() {
      */
     private inner class OSIABWebChromeClient : WebChromeClient() {
 
+        private var pendingAcceptTypes: String = ""
+        private var pendingCaptureEnabled: Boolean = false
+
         // handle standard permissions (e.g. audio, camera)
         override fun onPermissionRequest(request: PermissionRequest?) {
             request?.let {
@@ -569,12 +593,74 @@ class OSIABWebViewActivity : AppCompatActivity() {
             filePathCallback: ValueCallback<Array<Uri>>?,
             fileChooserParams: FileChooserParams
         ): Boolean {
+
             this@OSIABWebViewActivity.filePathCallback = filePathCallback
 
             val acceptTypes = fileChooserParams.acceptTypes.joinToString()
+            val captureEnabled = fileChooserParams.isCaptureEnabled
+            pendingAcceptTypes = acceptTypes
+            pendingCaptureEnabled = captureEnabled
+
+            // If camera is needed and not granted -> request permission
+            if (fileChooserParams.isCaptureEnabled &&
+                ContextCompat.checkSelfPermission(this@OSIABWebViewActivity, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this@OSIABWebViewActivity,
+                    arrayOf(Manifest.permission.CAMERA),
+                    CAMERA_PERMISSION_REQUEST_CODE
+                )
+                // Don’t launch chooser yet — wait for permission result
+                return true
+            }
+
+            try {
+                //fileChooserLauncher.launch(intent!!)
+                //fileChooserLauncher.launch(chooserIntent)
+                launchFileChooser(acceptTypes, captureEnabled)
+                return true
+            } catch (npe: NullPointerException) {
+                //this@OSIABWebViewActivity.filePathCallback = null
+                Log.e(
+                    LOG_TAG,
+                    "Attempted to launch but intent is null; fileChooserParams=$fileChooserParams",
+                    npe
+                )
+                cancelFileChooser()
+                return false
+            } catch (e: Exception) {
+                //this@OSIABWebViewActivity.filePathCallback = null
+                Log.d(LOG_TAG, "Error launching file chooser. Exception: ${e.message}")
+                cancelFileChooser()
+                return false
+            }
+        }
+
+        fun cancelFileChooser() {
+            filePathCallback?.onReceiveValue(null)
+            filePathCallback = null
+            pendingAcceptTypes = ""
+            pendingCaptureEnabled = false
+        }
+
+        fun retryFileChooser() {
+
+            try {
+                launchFileChooser(pendingAcceptTypes, pendingCaptureEnabled)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                cancelFileChooser()
+            }
+            pendingAcceptTypes = ""
+            pendingCaptureEnabled = false
+        }
+
+        private fun launchFileChooser(acceptTypes: String = "", isCaptureEnabled: Boolean = false) {
             val intentList = mutableListOf<Intent>()
 
-            if (fileChooserParams.isCaptureEnabled) {
+            if (isCaptureEnabled) {
+
                 // --- Photo capture ---
                 if (acceptTypes.contains("image") || acceptTypes.isEmpty()) {
                     val photoFile = createTempFile(this@OSIABWebViewActivity, "IMG_", ".jpg")
@@ -627,26 +713,11 @@ class OSIABWebViewActivity : AppCompatActivity() {
                 putExtra(Intent.EXTRA_INITIAL_INTENTS, intentList.toTypedArray())
             }
 
-            val intent = fileChooserParams.createIntent()
-            try {
-                //fileChooserLauncher.launch(intent!!)
-                fileChooserLauncher.launch(chooserIntent)
-            } catch (npe: NullPointerException) {
-                this@OSIABWebViewActivity.filePathCallback = null
-                Log.e(
-                    LOG_TAG,
-                    "Attempted to launch but intent is null; fileChooserParams=$fileChooserParams",
-                    npe
-                )
-                return false
-            } catch (e: Exception) {
-                this@OSIABWebViewActivity.filePathCallback = null
-                Log.d(LOG_TAG, "Error launching file chooser. Exception: ${e.message}")
-                return false
-            }
-            return true
+            fileChooserLauncher.launch(chooserIntent)
         }
+
     }
+
 
     /**
      * Clears the WebView cache and removes all cookies if 'clearCache' parameter is 'true'.
