@@ -82,6 +82,10 @@ class OSIABWebViewActivity : AppCompatActivity() {
     private var geolocationOrigin: String? = null
     private var wasGeolocationPermissionDenied = false
 
+    // used in onShowFileChooser when taking photos or videos
+    private var currentPhotoUri: Uri? = null
+    private var currentVideoUri: Uri? = null
+
     // for file chooser
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val fileChooserLauncher =
@@ -120,9 +124,6 @@ class OSIABWebViewActivity : AppCompatActivity() {
     // the original URL of the PDF file, used to display it correctly in the view
     // and to send the correct URL in the browserPageNavigationCompleted event
     private var originalUrl: String? = null
-
-    private var currentPhotoUri: Uri? = null
-    private var currentVideoUri: Uri? = null
 
     companion object {
         const val WEB_VIEW_URL_EXTRA = "WEB_VIEW_URL_EXTRA"
@@ -389,7 +390,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
                     // Permission granted, launch the file chooser
                     try {
                         filePathCallback?.let {
-                            (webView.webChromeClient as? OSIABWebChromeClient)?.retryFileChooser() //TODO not the best way of calling this method
+                            (webView.webChromeClient as? OSIABWebChromeClient)?.retryFileChooser()
                         }
                     } catch (e: Exception) {
                         Log.d(LOG_TAG, "Error launching file chooser. Exception: ${e.message}")
@@ -399,8 +400,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
                     // Permission denied, try file chooser without camera
                     try {
                         filePathCallback?.let {
-                            //pendingCaptureEnabled = false
-                            (webView.webChromeClient as? OSIABWebChromeClient)?.retryFileChooser() //TODO not the best way of calling this method
+                            (webView.webChromeClient as? OSIABWebChromeClient)?.retryFileChooser()
                         }
                     } catch (e: Exception) {
                         Log.d(LOG_TAG, "Error launching file chooser. Exception: ${e.message}")
