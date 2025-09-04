@@ -82,6 +82,10 @@ class OSIABWebViewActivity : AppCompatActivity() {
     private var geolocationOrigin: String? = null
     private var wasGeolocationPermissionDenied = false
 
+    // for handling uploads (photo, video, gallery, files)
+    private var pendingAcceptTypes: String = ""
+    private var pendingCaptureEnabled: Boolean = false
+
     // for file chooser
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val fileChooserLauncher =
@@ -395,12 +399,21 @@ class OSIABWebViewActivity : AppCompatActivity() {
                         }
                     } catch (e: Exception) {
                         Log.d(LOG_TAG, "Error launching file chooser. Exception: ${e.message}")
+                        (webView.webChromeClient as? OSIABWebChromeClient)?.cancelFileChooser()
                     }
                 } else {
-                    // Permission denied, notify the WebView
-                    //filePathCallback?.onReceiveValue(null)
-                    //filePathCallback = null
-                    (webView.webChromeClient as? OSIABWebChromeClient)?.cancelFileChooser()
+                    // Permission denied, try file chooser without camera
+                    try {
+                        filePathCallback?.let {
+                            //launchFileChooser("", true)
+                            //webView.webChromeClient.retryFileChooser()
+                            pendingCaptureEnabled = false
+                            (webView.webChromeClient as? OSIABWebChromeClient)?.retryFileChooser() //TODO not the best way of calling this method
+                        }
+                    } catch (e: Exception) {
+                        Log.d(LOG_TAG, "Error launching file chooser. Exception: ${e.message}")
+                        (webView.webChromeClient as? OSIABWebChromeClient)?.cancelFileChooser()
+                    }
                 }
             }
         }
@@ -567,9 +580,6 @@ class OSIABWebViewActivity : AppCompatActivity() {
      */
     private inner class OSIABWebChromeClient : WebChromeClient() {
 
-        private var pendingAcceptTypes: String = ""
-        private var pendingCaptureEnabled: Boolean = false
-
         // handle standard permissions (e.g. audio, camera)
         override fun onPermissionRequest(request: PermissionRequest?) {
             request?.let {
@@ -645,7 +655,6 @@ class OSIABWebViewActivity : AppCompatActivity() {
         }
 
         fun retryFileChooser() {
-
             try {
                 launchFileChooser(pendingAcceptTypes, pendingCaptureEnabled)
             } catch (e: Exception) {
