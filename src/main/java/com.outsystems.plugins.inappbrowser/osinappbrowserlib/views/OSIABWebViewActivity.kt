@@ -95,8 +95,8 @@ class OSIABWebViewActivity : AppCompatActivity() {
                     result.resultCode,
                     result.data
                 ) // file was selected from gallery or file manager
-                currentPhotoUri != null -> arrayOf(currentPhotoUri) // photo capture
-                currentVideoUri != null -> arrayOf(currentVideoUri) // video capture
+                currentPhotoUri != null -> arrayOf(currentPhotoUri) // photo capture, since URI is not in data
+                currentVideoUri != null -> arrayOf(currentVideoUri) // fallback for video capture, if video URI is not in data
                 else -> null
             }
             filePathCallback?.onReceiveValue(uris)
