@@ -647,8 +647,8 @@ class OSIABWebViewActivity : AppCompatActivity() {
             val permissionGranted = ContextCompat.checkSelfPermission(
                 this@OSIABWebViewActivity, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
+            // photo capture
             if (permissionGranted) {
-                // photo capture
                 if (acceptTypes.contains("image") || acceptTypes.isEmpty()) {
                     currentPhotoFile = createTempFile(this@OSIABWebViewActivity, "IMG_", ".jpg").also { file ->
                         currentPhotoUri = FileProvider.getUriForFile(
