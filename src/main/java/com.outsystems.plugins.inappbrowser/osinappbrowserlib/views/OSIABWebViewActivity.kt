@@ -585,9 +585,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
             filePathCallback: ValueCallback<Array<Uri>>,
             fileChooserParams: FileChooserParams
         ): Boolean {
-
             this@OSIABWebViewActivity.filePathCallback = filePathCallback
-
             val acceptTypes = fileChooserParams.acceptTypes.joinToString()
             val captureEnabled = fileChooserParams.isCaptureEnabled
             pendingAcceptTypes = acceptTypes
