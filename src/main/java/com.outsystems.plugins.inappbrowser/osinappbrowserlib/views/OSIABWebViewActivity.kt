@@ -146,17 +146,6 @@ class OSIABWebViewActivity : AppCompatActivity() {
             return File.createTempFile("${prefix}${System.currentTimeMillis()}_", suffix, storageDir)
         }
 
-        private fun grantUriPermissions(context: Context, intent: Intent, uri: Uri) {
-            val resInfoList = context.packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
-            for (resolveInfo in resInfoList) {
-                context.grantUriPermission(
-                    resolveInfo.activityInfo.packageName,
-                    uri,
-                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            }
-        }
-
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -607,7 +596,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
             pendingAcceptTypes = acceptTypes
             pendingCaptureEnabled = captureEnabled
 
-            // If camera is needed and not granted -> request permission
+            // if camera permission is not granted, request permission
             if (ContextCompat.checkSelfPermission(
                     this@OSIABWebViewActivity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
             ) {
@@ -616,7 +605,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
                     arrayOf(Manifest.permission.CAMERA),
                     CAMERA_PERMISSION_REQUEST_CODE
                 )
-                // Don’t launch chooser yet — wait for permission result
+                // don’t launch chooser yet, wait for permission result
                 return true
             }
 
@@ -673,9 +662,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
                     val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
                         putExtra(MediaStore.EXTRA_OUTPUT, currentPhotoUri)
-                        addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
-                    grantUriPermissions(this@OSIABWebViewActivity, takePictureIntent, currentPhotoUri!!)
                     intentList.add(takePictureIntent)
                 }
 
@@ -690,9 +677,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
                     val takeVideoIntent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).apply {
                         putExtra(MediaStore.EXTRA_OUTPUT, currentVideoUri)
-                        addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
-                    grantUriPermissions(this@OSIABWebViewActivity, takeVideoIntent, currentVideoUri!!)
                     intentList.add(takeVideoIntent)
                 }
 
