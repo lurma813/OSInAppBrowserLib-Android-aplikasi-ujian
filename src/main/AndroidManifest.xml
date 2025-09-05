@@ -29,6 +29,7 @@
             android:excludeFromRecents="true"
             android:windowSoftInputMode="stateAlwaysHidden|adjustPan" />
 
+        <!-- Used for when taking photos/videos when uploading files through WebChromeClient.onShowFileChooser -->
         <provider
             android:name="com.outsystems.plugins.inappbrowser.osinappbrowserlib.FileProvider"
             android:authorities="${applicationId}.fileprovider"
