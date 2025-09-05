@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import android.view.Gravity
@@ -90,31 +89,20 @@ class OSIABWebViewActivity : AppCompatActivity() {
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val fileChooserLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            /*
-            filePathCallback?.onReceiveValue(
-                if (result.resultCode == Activity.RESULT_OK)
-                    WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
-                else null
-            )
-            filePathCallback = null
-             */
-
             val uris = when {
                 result.resultCode != Activity.RESULT_OK -> null
                 result.data?.data != null -> WebChromeClient.FileChooserParams.parseResult(
                     result.resultCode,
                     result.data
-                ) // gallery
+                ) // file was selected from gallery or file manager
                 currentPhotoUri != null -> arrayOf(currentPhotoUri) // photo capture
                 currentVideoUri != null -> arrayOf(currentVideoUri) // video capture
                 else -> null
             }
-
             filePathCallback?.onReceiveValue(uris)
             filePathCallback = null
             currentPhotoUri = null
             currentVideoUri = null
-
         }
 
     // for back navigation
@@ -133,7 +121,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
         const val ENABLED_ALPHA = 1.0f
         const val REQUEST_STANDARD_PERMISSION = 622
         const val REQUEST_LOCATION_PERMISSION = 623
-        const val CAMERA_PERMISSION_REQUEST_CODE = 824
+        const val REQUEST_CAMERA_PERMISSION = 624
         const val LOG_TAG = "OSIABWebViewActivity"
         val errorsToHandle = listOf(
             WebViewClient.ERROR_HOST_LOOKUP,
@@ -373,10 +361,10 @@ class OSIABWebViewActivity : AppCompatActivity() {
                 geolocationCallback = null
                 geolocationOrigin = null
             }
-            CAMERA_PERMISSION_REQUEST_CODE -> {
+            REQUEST_CAMERA_PERMISSION -> {
                 val granted = grantResults.all { it == PackageManager.PERMISSION_GRANTED }
                 if (granted) {
-                    // Permission granted, launch the file chooser
+                    // permission granted, launch the file chooser
                     try {
                         filePathCallback?.let {
                             (webView.webChromeClient as? OSIABWebChromeClient)?.retryFileChooser()
@@ -386,7 +374,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
                         (webView.webChromeClient as? OSIABWebChromeClient)?.cancelFileChooser()
                     }
                 } else {
-                    // Permission denied, try file chooser without camera
+                    // permission denied, launch the file chooser without camera options
                     try {
                         filePathCallback?.let {
                             (webView.webChromeClient as? OSIABWebChromeClient)?.retryFileChooser()
@@ -584,8 +572,8 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
         // handle opening the file chooser within the WebView
         override fun onShowFileChooser(
-            webView: WebView?,
-            filePathCallback: ValueCallback<Array<Uri>>?,
+            webView: WebView,
+            filePathCallback: ValueCallback<Array<Uri>>,
             fileChooserParams: FileChooserParams
         ): Boolean {
 
@@ -603,7 +591,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
                 ActivityCompat.requestPermissions(
                     this@OSIABWebViewActivity,
                     arrayOf(Manifest.permission.CAMERA),
-                    CAMERA_PERMISSION_REQUEST_CODE
+                    REQUEST_CAMERA_PERMISSION
                 )
                 // don’t launch chooser yet, wait for permission result
                 return true
@@ -651,7 +639,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
                 this@OSIABWebViewActivity, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
             if (permissionGranted) {
-                // --- Photo capture ---
+                // photo capture
                 if (acceptTypes.contains("image") || acceptTypes.isEmpty()) {
                     val photoFile = createTempFile(this@OSIABWebViewActivity, "IMG_", ".jpg")
                     currentPhotoUri = FileProvider.getUriForFile(
@@ -666,7 +654,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
                     intentList.add(takePictureIntent)
                 }
 
-                // --- Video capture ---
+                // video capture
                 if (acceptTypes.contains("video") || acceptTypes.isEmpty()) {
                     val videoFile = createTempFile(this@OSIABWebViewActivity, "VID_", ".mp4")
                     currentVideoUri = FileProvider.getUriForFile(
@@ -683,24 +671,25 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
             }
 
+            // only camera intents (no gallery)
             if (isCaptureEnabled && permissionGranted) {
-                // Only camera intents (no gallery)
                 val chooser = if (intentList.size == 1) {
-                    intentList[0] // single option launch directly
+                    // with single option we launch the camera directly
+                    intentList[0]
                 } else {
                     Intent(Intent.ACTION_CHOOSER).apply {
+                        // with multiple options we show the chooser
                         putExtra(Intent.EXTRA_INTENT, intentList[0])
-                        if (intentList.size > 1) {
-                            putExtra(Intent.EXTRA_INITIAL_INTENTS, intentList.drop(1).toTypedArray())
-                        }
+                        putExtra(Intent.EXTRA_INITIAL_INTENTS, intentList.drop(1).toTypedArray())
                     }
                 }
                 fileChooserLauncher.launch(chooser)
             } else if (!isCaptureEnabled) {
                 // if capture is not enabled, we always show the full chooser
                 // if capture is enabled, we only want to show camera options (photo and video)
-                // so if capture is enabled but permission is not granted, we don't do anything
-                // Normal flow with gallery/file picker
+                // so if capture is enabled but permission is not granted (else), we don't do anything
+
+                // flow with gallery/file picker
                 val contentIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     type = when {
