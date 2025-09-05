@@ -82,7 +82,9 @@ class OSIABWebViewActivity : AppCompatActivity() {
     private var wasGeolocationPermissionDenied = false
 
     // used in onShowFileChooser when taking photos or videos
+    private var currentPhotoFile: File? = null
     private var currentPhotoUri: Uri? = null
+    private var currentVideoFile: File? = null
     private var currentVideoUri: Uri? = null
 
     // for file chooser
@@ -94,14 +96,21 @@ class OSIABWebViewActivity : AppCompatActivity() {
                 result.data?.data != null -> WebChromeClient.FileChooserParams.parseResult(
                     result.resultCode,
                     result.data
-                ) // file was selected from gallery or file manager
-                currentPhotoUri != null -> arrayOf(currentPhotoUri) // photo capture, since URI is not in data
-                currentVideoUri != null -> arrayOf(currentVideoUri) // fallback for video capture, if video URI is not in data
+                ) // file was selected from gallery or file manager, some OEMs also return the video here (e.g. Google)
+
+                // we need to check currentPhotoFile.length() > 0 to make sure a photo was actually taken
+                currentPhotoUri != null && currentPhotoFile != null && currentPhotoFile!!.length() > 0 ->
+                    arrayOf(currentPhotoUri) // photo capture, since URI is not in data
+                // we need to check currentVideoFile.length() > 0 to make sure a video was actually taken
+                currentVideoUri != null && currentVideoFile != null && currentVideoFile!!.length() > 0 ->
+                    arrayOf(currentVideoUri) // fallback for video capture, if video URI is not in data (e.g. Samsung devices)
                 else -> null
             }
             filePathCallback?.onReceiveValue(uris)
             filePathCallback = null
+            currentPhotoFile = null
             currentPhotoUri = null
+            currentVideoFile = null
             currentVideoUri = null
         }
 
@@ -641,13 +650,14 @@ class OSIABWebViewActivity : AppCompatActivity() {
             if (permissionGranted) {
                 // photo capture
                 if (acceptTypes.contains("image") || acceptTypes.isEmpty()) {
-                    val photoFile = createTempFile(this@OSIABWebViewActivity, "IMG_", ".jpg")
-                    currentPhotoUri = FileProvider.getUriForFile(
-                        this@OSIABWebViewActivity,
-                        "${this@OSIABWebViewActivity.packageName}.fileprovider",
-                        photoFile
-                    )
-
+                    currentPhotoFile = createTempFile(this@OSIABWebViewActivity, "IMG_", ".jpg").also { file ->
+                        currentPhotoUri = FileProvider.getUriForFile(
+                            this@OSIABWebViewActivity,
+                            "${this@OSIABWebViewActivity.packageName}.fileprovider",
+                            file
+                        )
+                    }
+                    
                     val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
                         putExtra(MediaStore.EXTRA_OUTPUT, currentPhotoUri)
                     }
@@ -656,12 +666,14 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
                 // video capture
                 if (acceptTypes.contains("video") || acceptTypes.isEmpty()) {
-                    val videoFile = createTempFile(this@OSIABWebViewActivity, "VID_", ".mp4")
-                    currentVideoUri = FileProvider.getUriForFile(
-                        this@OSIABWebViewActivity,
-                        "${this@OSIABWebViewActivity.packageName}.fileprovider",
-                        videoFile
-                    )
+                    currentVideoFile = createTempFile(this@OSIABWebViewActivity, "VID_", ".mp4").also { file ->
+                        currentVideoFile = file
+                        currentVideoUri = FileProvider.getUriForFile(
+                            this@OSIABWebViewActivity,
+                            "${this@OSIABWebViewActivity.packageName}.fileprovider",
+                            file
+                        )
+                    }
 
                     val takeVideoIntent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).apply {
                         putExtra(MediaStore.EXTRA_OUTPUT, currentVideoUri)
