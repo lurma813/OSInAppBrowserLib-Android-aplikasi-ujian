@@ -630,11 +630,27 @@ class OSIABWebViewActivity : AppCompatActivity() {
         }
 
         private fun launchFileChooser(acceptTypes: String = "", isCaptureEnabled: Boolean = false) {
+            val intentList = buildPhotoVideoIntents(acceptTypes)
+            val permissionNotDeclaredOrGranted = hasCameraPermissionDeclared().not() || isCameraPermissionGranted()
+
+            if (isCaptureEnabled && permissionNotDeclaredOrGranted) {
+                // if capture is enabled, we only show the camera and video options
+                launchCameraChooser(intentList)
+            } else if (!isCaptureEnabled) {
+                // if capture is not enabled, we show the full chooser
+                launchFullChooser(intentList, acceptTypes, permissionNotDeclaredOrGranted)
+            } else {
+                // capture is enabled but permission declared and not granted,
+                // as our only option is to capture, we cannot proceed
+                cancelFileChooser()
+                return
+            }
+        }
+
+        private fun buildPhotoVideoIntents(acceptTypes: String): MutableList<Intent> {
             val intentList = mutableListOf<Intent>()
             val permissionNotDeclaredOrGranted = hasCameraPermissionDeclared().not() || isCameraPermissionGranted()
 
-            // photo capture
-            // if permission isn't declared, we don't need it
             if (permissionNotDeclaredOrGranted) {
                 if (acceptTypes.contains("image") || acceptTypes.isEmpty()) {
                     currentPhotoFile = createTempFile(this@OSIABWebViewActivity, "IMG_", ".jpg").also { file ->
@@ -644,14 +660,11 @@ class OSIABWebViewActivity : AppCompatActivity() {
                             file
                         )
                     }
-                    
                     val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
                         putExtra(MediaStore.EXTRA_OUTPUT, currentPhotoUri)
                     }
                     intentList.add(takePictureIntent)
                 }
-
-                // video capture
                 if (acceptTypes.contains("video") || acceptTypes.isEmpty()) {
                     currentVideoFile = createTempFile(this@OSIABWebViewActivity, "VID_", ".mp4").also { file ->
                         currentVideoFile = file
@@ -661,56 +674,43 @@ class OSIABWebViewActivity : AppCompatActivity() {
                             file
                         )
                     }
-
                     val takeVideoIntent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).apply {
                         putExtra(MediaStore.EXTRA_OUTPUT, currentVideoUri)
                     }
                     intentList.add(takeVideoIntent)
                 }
-
             }
+            return intentList
+        }
 
-            // only camera intents (no gallery)
-            if (isCaptureEnabled && permissionNotDeclaredOrGranted) {
-                val chooser = if (intentList.size == 1) {
-                    // with single option we launch the camera directly
-                    intentList[0]
-                } else {
-                    Intent(Intent.ACTION_CHOOSER).apply {
-                        // with multiple options we show the chooser
-                        putExtra(Intent.EXTRA_INTENT, intentList[0])
-                        putExtra(Intent.EXTRA_INITIAL_INTENTS, intentList.drop(1).toTypedArray())
-                    }
-                }
-                fileChooserLauncher.launch(chooser)
-            } else if (!isCaptureEnabled) {
-                // if capture is not enabled, we always show the full chooser
-
-                // flow with gallery/file picker
-                val contentIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    type = when {
-                        acceptTypes.contains("video") -> "video/*"
-                        acceptTypes.contains("image") -> "image/*"
-                        else -> "*/*"
-                    }
-                }
-
-                val chooser = Intent(Intent.ACTION_CHOOSER).apply {
-                    putExtra(Intent.EXTRA_INTENT, contentIntent)
-                    if (permissionNotDeclaredOrGranted) {
-                        if (intentList.isNotEmpty()) {
-                            putExtra(Intent.EXTRA_INITIAL_INTENTS, intentList.toTypedArray())
-                        }
-                    }
-                }
-                fileChooserLauncher.launch(chooser)
+        private fun launchCameraChooser(intentList: List<Intent>) {
+            val chooser = if (intentList.size == 1) {
+                intentList[0]
             } else {
-                // capture enabled but permission declared and not granted
-                // as our only option is to capture, we can't do anything
-                cancelFileChooser()
-                return
+                Intent(Intent.ACTION_CHOOSER).apply {
+                    putExtra(Intent.EXTRA_INTENT, intentList[0])
+                    putExtra(Intent.EXTRA_INITIAL_INTENTS, intentList.drop(1).toTypedArray())
+                }
             }
+            fileChooserLauncher.launch(chooser)
+        }
+
+        private fun launchFullChooser(intentList: List<Intent>, acceptTypes: String, permissionNotDeclaredOrGranted: Boolean) {
+            val contentIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = when {
+                    acceptTypes.contains("video") -> "video/*"
+                    acceptTypes.contains("image") -> "image/*"
+                    else -> "*/*"
+                }
+            }
+            val chooser = Intent(Intent.ACTION_CHOOSER).apply {
+                putExtra(Intent.EXTRA_INTENT, contentIntent)
+                if (permissionNotDeclaredOrGranted && intentList.isNotEmpty()) {
+                    putExtra(Intent.EXTRA_INITIAL_INTENTS, intentList.toTypedArray())
+                }
+            }
+            fileChooserLauncher.launch(chooser)
         }
 
         private fun isCameraPermissionGranted(): Boolean {
