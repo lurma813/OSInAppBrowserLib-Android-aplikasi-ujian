@@ -685,8 +685,6 @@ class OSIABWebViewActivity : AppCompatActivity() {
                 fileChooserLauncher.launch(chooser)
             } else if (!isCaptureEnabled) {
                 // if capture is not enabled, we always show the full chooser
-                // if capture is enabled, we only want to show camera options (photo and video)
-                // so if capture is enabled but permission is not granted (else), we don't do anything
 
                 // flow with gallery/file picker
                 val contentIntent = Intent(Intent.ACTION_GET_CONTENT).apply {
