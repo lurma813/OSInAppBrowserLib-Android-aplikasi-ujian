@@ -552,8 +552,8 @@ class OSIABWebViewActivity : AppCompatActivity() {
     private inner class OSIABWebChromeClient : WebChromeClient() {
 
         // for handling uploads (photo, video, gallery, files)
-        private var pendingAcceptTypes: String = ""
-        private var pendingCaptureEnabled: Boolean = false
+        private var acceptTypes: String = ""
+        private var captureEnabled: Boolean = false
 
         // handle standard permissions (e.g. audio, camera)
         override fun onPermissionRequest(request: PermissionRequest?) {
@@ -579,10 +579,8 @@ class OSIABWebViewActivity : AppCompatActivity() {
             fileChooserParams: FileChooserParams
         ): Boolean {
             this@OSIABWebViewActivity.filePathCallback = filePathCallback
-            val acceptTypes = fileChooserParams.acceptTypes.joinToString()
-            val captureEnabled = fileChooserParams.isCaptureEnabled
-            pendingAcceptTypes = acceptTypes
-            pendingCaptureEnabled = captureEnabled
+            acceptTypes = fileChooserParams.acceptTypes.joinToString()
+            captureEnabled = fileChooserParams.isCaptureEnabled
 
             // if camera permission is declared in manifest but is not granted, request it
             if (hasCameraPermissionDeclared() && !isCameraPermissionGranted()) {
@@ -616,19 +614,19 @@ class OSIABWebViewActivity : AppCompatActivity() {
         fun cancelFileChooser() {
             filePathCallback?.onReceiveValue(null)
             filePathCallback = null
-            pendingAcceptTypes = ""
-            pendingCaptureEnabled = false
+            acceptTypes = ""
+            captureEnabled = false
         }
 
         fun retryFileChooser() {
             try {
-                launchFileChooser(pendingAcceptTypes, pendingCaptureEnabled)
+                launchFileChooser(acceptTypes, captureEnabled)
             } catch (e: Exception) {
                 e.printStackTrace()
                 cancelFileChooser()
             }
-            pendingAcceptTypes = ""
-            pendingCaptureEnabled = false
+            acceptTypes = ""
+            captureEnabled = false
         }
 
         private fun launchFileChooser(acceptTypes: String = "", isCaptureEnabled: Boolean = false) {
