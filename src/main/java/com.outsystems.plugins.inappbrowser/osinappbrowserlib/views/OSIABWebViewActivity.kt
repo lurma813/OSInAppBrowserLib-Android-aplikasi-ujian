@@ -49,6 +49,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 class OSIABWebViewActivity : AppCompatActivity() {
 
@@ -140,7 +143,9 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
         private fun createTempFile(context: Context, prefix: String, suffix: String): File {
             val storageDir = context.cacheDir
-            return File.createTempFile("${prefix}${System.currentTimeMillis()}_", suffix, storageDir)
+            val formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss", Locale.getDefault())
+            val timeStamp = LocalDateTime.now().format(formatter)
+            return File.createTempFile("${prefix}${timeStamp}_", suffix, storageDir)
         }
 
     }
