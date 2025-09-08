@@ -579,10 +579,8 @@ class OSIABWebViewActivity : AppCompatActivity() {
             pendingAcceptTypes = acceptTypes
             pendingCaptureEnabled = captureEnabled
 
-            // if camera permission is not granted, request permission
-            if (ContextCompat.checkSelfPermission(
-                    this@OSIABWebViewActivity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
-            ) {
+            // if camera permission is declared in manifest but is not granted, request it
+            if (hasCameraPermissionDeclared() && !isCameraPermissionGranted()) {
                 ActivityCompat.requestPermissions(
                     this@OSIABWebViewActivity,
                     arrayOf(Manifest.permission.CAMERA),
@@ -630,11 +628,11 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
         private fun launchFileChooser(acceptTypes: String = "", isCaptureEnabled: Boolean = false) {
             val intentList = mutableListOf<Intent>()
-            val permissionGranted = ContextCompat.checkSelfPermission(
-                this@OSIABWebViewActivity, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+            val permissionNotDeclaredOrGranted = hasCameraPermissionDeclared().not() || isCameraPermissionGranted()
 
             // photo capture
-            if (permissionGranted) {
+            // if permission isn't declared, we don't need it
+            if (permissionNotDeclaredOrGranted) {
                 if (acceptTypes.contains("image") || acceptTypes.isEmpty()) {
                     currentPhotoFile = createTempFile(this@OSIABWebViewActivity, "IMG_", ".jpg").also { file ->
                         currentPhotoUri = FileProvider.getUriForFile(
@@ -670,7 +668,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
             }
 
             // only camera intents (no gallery)
-            if (isCaptureEnabled && permissionGranted) {
+            if (isCaptureEnabled && permissionNotDeclaredOrGranted) {
                 val chooser = if (intentList.size == 1) {
                     // with single option we launch the camera directly
                     intentList[0]
@@ -699,7 +697,7 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
                 val chooser = Intent(Intent.ACTION_CHOOSER).apply {
                     putExtra(Intent.EXTRA_INTENT, contentIntent)
-                    if (permissionGranted) {
+                    if (permissionNotDeclaredOrGranted) {
                         if (intentList.isNotEmpty()) {
                             putExtra(Intent.EXTRA_INITIAL_INTENTS, intentList.toTypedArray())
                         }
@@ -707,11 +705,37 @@ class OSIABWebViewActivity : AppCompatActivity() {
                 }
                 fileChooserLauncher.launch(chooser)
             } else {
-                // capture enabled but permission not granted
+                // capture enabled but permission declared and not granted
                 // as our only option is to capture, we can't do anything
                 cancelFileChooser()
                 return
             }
+        }
+
+        private fun isCameraPermissionGranted(): Boolean {
+            return ContextCompat.checkSelfPermission(
+                this@OSIABWebViewActivity, Manifest.permission.CAMERA
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+
+        private fun hasCameraPermissionDeclared(): Boolean {
+            // The CAMERA permission does not need to be requested unless it is declared in AndroidManifest.xml
+            // If it's declared, camera intents will throw SecurityException if permission is not granted
+            try {
+                val packageManager = this@OSIABWebViewActivity.packageManager
+                val permissionsInPackage = packageManager.getPackageInfo(
+                    this@OSIABWebViewActivity.packageName,
+                    PackageManager.GET_PERMISSIONS
+                ).requestedPermissions ?: arrayOf()
+                for (permission in permissionsInPackage) {
+                    if (permission == Manifest.permission.CAMERA) {
+                        return true
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d(LOG_TAG, e.message.toString())
+            }
+            return false
         }
 
     }
