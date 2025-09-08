@@ -371,27 +371,15 @@ class OSIABWebViewActivity : AppCompatActivity() {
                 geolocationOrigin = null
             }
             REQUEST_CAMERA_PERMISSION -> {
-                val granted = grantResults.all { it == PackageManager.PERMISSION_GRANTED }
-                if (granted) {
-                    // permission granted, launch the file chooser
-                    try {
-                        filePathCallback?.let {
-                            (webView.webChromeClient as? OSIABWebChromeClient)?.retryFileChooser()
-                        }
-                    } catch (e: Exception) {
-                        Log.d(LOG_TAG, "Error launching file chooser. Exception: ${e.message}")
-                        (webView.webChromeClient as? OSIABWebChromeClient)?.cancelFileChooser()
+                // permission granted, launch the file chooser
+                // permission grant is determined in launchFileChooser
+                try {
+                    filePathCallback?.let {
+                        (webView.webChromeClient as? OSIABWebChromeClient)?.retryFileChooser()
                     }
-                } else {
-                    // permission denied, launch the file chooser without camera options
-                    try {
-                        filePathCallback?.let {
-                            (webView.webChromeClient as? OSIABWebChromeClient)?.retryFileChooser()
-                        }
-                    } catch (e: Exception) {
-                        Log.d(LOG_TAG, "Error launching file chooser. Exception: ${e.message}")
-                        (webView.webChromeClient as? OSIABWebChromeClient)?.cancelFileChooser()
-                    }
+                } catch (e: Exception) {
+                    Log.d(LOG_TAG, "Error launching file chooser. Exception: ${e.message}")
+                    (webView.webChromeClient as? OSIABWebChromeClient)?.cancelFileChooser()
                 }
             }
         }
