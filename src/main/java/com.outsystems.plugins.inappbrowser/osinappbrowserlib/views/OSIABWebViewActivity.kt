@@ -2,6 +2,7 @@ package com.outsystems.plugins.inappbrowser.osinappbrowserlib.views
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -13,6 +14,8 @@ import android.util.Log
 import android.view.Gravity
 import android.graphics.Bitmap
 import android.view.View
+import android.view.LayoutInflater
+import android.widget.Button
 import android.webkit.CookieManager
 import android.webkit.GeolocationPermissions
 import android.webkit.PermissionRequest
@@ -22,7 +25,6 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Button
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -125,6 +127,9 @@ class OSIABWebViewActivity : AppCompatActivity() {
     // and to send the correct URL in the browserPageNavigationCompleted event
     private var originalUrl: String? = null
 
+    // Dialog konfirmasi
+    private var closeConfirmationDialog: AlertDialog? = null
+
     companion object {
         const val WEB_VIEW_URL_EXTRA = "WEB_VIEW_URL_EXTRA"
         const val WEB_VIEW_OPTIONS_EXTRA = "WEB_VIEW_OPTIONS_EXTRA"
@@ -155,9 +160,13 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
         onBackPressedCallback = object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (!webView.canGoBack()) return
-                hideErrorScreen()
-                webView.goBack()
+                if (webView.canGoBack()) {
+                    hideErrorScreen()
+                    webView.goBack()
+                } else {
+                    // Tampilkan konfirmasi saat hardware back dan tidak ada halaman sebelumnya
+                    showCloseConfirmationDialog()
+                }
             }
         }
         onBackPressedDispatcher.addCallback(this, onBackPressedCallback)
@@ -196,7 +205,8 @@ class OSIABWebViewActivity : AppCompatActivity() {
         closeButton = findViewById(R.id.close_button)
         closeButton.text = options.closeButtonText.ifBlank { "Close" }
         closeButton.setOnClickListener {
-            finish()
+            // Tampilkan konfirmasi saat tombol close ditekan
+            showCloseConfirmationDialog()
         }
 
         if (options.showToolbar)
@@ -228,6 +238,10 @@ class OSIABWebViewActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        // Tutup dialog jika masih terbuka saat activity pause
+        closeConfirmationDialog?.dismiss()
+        closeConfirmationDialog = null
+        
         if (options.pauseMedia) {
             webView.onPause()
         }
@@ -241,6 +255,9 @@ class OSIABWebViewActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        // Pastikan dialog ditutup untuk mencegah memory leak
+        closeConfirmationDialog?.dismiss()
+        closeConfirmationDialog = null
         webView.destroy()
         super.onDestroy()
     }
@@ -250,6 +267,56 @@ class OSIABWebViewActivity : AppCompatActivity() {
         if (options.pauseMedia) {
             webView.onResume()
         }
+    }
+
+    /**
+     * Menampilkan dialog konfirmasi untuk menutup WebView
+     */
+    private fun showCloseConfirmationDialog() {
+        // Tutup dialog sebelumnya jika masih terbuka
+        closeConfirmationDialog?.dismiss()
+        
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_confirmation_webview, null)
+        
+        // Customize dialog jika perlu
+        val titleTextView = dialogView.findViewById<TextView>(R.id.dialog_title)
+        val messageTextView = dialogView.findViewById<TextView>(R.id.dialog_message)
+        val cancelButton = dialogView.findViewById<Button>(R.id.btn_cancel)
+        val confirmButton = dialogView.findViewById<Button>(R.id.btn_confirm)
+        
+        // Gunakan custom title/message jika ada di options, atau default
+        val dialogTitle = "Tutup Halaman?"
+        val dialogMessage = "Apakah Anda yakin ingin menutup halaman ini?"
+        
+        titleTextView.text = dialogTitle
+        messageTextView.text = dialogMessage
+        
+        // Buat dialog dengan custom theme
+        closeConfirmationDialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+        
+        // Setup button listeners
+        cancelButton.setOnClickListener {
+            closeConfirmationDialog?.dismiss()
+            closeConfirmationDialog = null
+        }
+        
+        confirmButton.setOnClickListener {
+            closeConfirmationDialog?.dismiss()
+            closeConfirmationDialog = null
+            finish()
+        }
+        
+        // Tampilkan dialog
+        closeConfirmationDialog?.show()
+        
+        // Atur ukuran dialog jika perlu
+        closeConfirmationDialog?.window?.setLayout(
+            (resources.displayMetrics.widthPixels * 0.85).toInt(),
+            android.view.WindowManager.LayoutParams.WRAP_CONTENT
+        )
     }
 
     private fun handleLoadUrl(url: String, additionalHttpHeaders: Map<String, String>? = null) {
